@@ -1,36 +1,36 @@
-'use strict';
+const redisModel = require('../models/redis');
 
-
-var redisModel = require('../models/redis'),
-    q = require('q');
-
-
-module.exports = function (app) {
-    var requestActive = function(req, res){
-        var dfd = q.defer();
-        redisModel.getStatus("active").done(function(active){
-            redisModel.getJobsInList(active).done(function(keys){
-                redisModel.formatKeys(keys).done(function(formattedKeys){
-                    redisModel.getProgressForKeys(formattedKeys).done(function(keyList){
-                        redisModel.getStatusCounts().done(function(countObject){
-                            var model = { keys: keyList, counts: countObject, active: true, type: "Active" };
-                            dfd.resolve(model);
+module.exports = (app) => {
+    var requestActive = (req, res) => {
+        return new Promise((resolve) => {
+            redisModel.getStatus("active").done((active) => {
+                redisModel.getJobsInList(active).done((keys) => {
+                    redisModel.formatKeys(keys).done((formattedKeys) => {
+                        redisModel.getProgressForKeys(formattedKeys).done((keyList) => {
+                            redisModel.getStatusCounts().done((countObject) => {
+                                const model = {
+                                    keys: keyList,
+                                    counts: countObject,
+                                    active: true,
+                                    type: "Active"
+                                };
+                                resolve(model);
+                            });
                         });
                     });
                 });
             });
         });
-        return dfd.promise;
     }
 
-    app.get('/active', function (req, res) {
-        requestActive(req, res).done(function(model){
+    app.get('/active', (req, res) => {
+        requestActive(req, res).then((model) => {
             res.render('jobList', model);
         });
     });
 
-    app.get('/api/active', function (req, res) {
-        requestActive(req, res).done(function(model){
+    app.get('/api/active', (req, res) => {
+        requestActive(req, res).then((model) => {
             res.json(model);
         });
     });

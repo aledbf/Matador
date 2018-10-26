@@ -1,31 +1,29 @@
-'use strict';
-
-var q = require('q')
-
-
-var redisModel = require('../models/redis');
+const redisModel = require('../models/redis');
 
 module.exports = function (app) {
+    const getNewJobModel = function (req, res) {
+        return new Promise((resolve) => {
+            redisModel.getStatusCounts().done(function (countObject) {
+                var model = {
+                    counts: countObject,
+                    newjob: true,
+                    type: "New Job"
+                };
 
-    var getNewJobModel = function(req, res){
-        var dfd = q.defer();
-        redisModel.getStatusCounts().done(function(countObject){
-            var model = { counts: countObject, newjob: true, type: "New Job" };
-            dfd.resolve(model);
-        });
-        return dfd.promise;
+                resolve(model);
+            });
+        })
     };
 
     app.get('/newjob', function (req, res) {
-        getNewJobModel(req, res).done(function(model){
+        getNewJobModel(req, res).then(function (model) {
             res.render('newJob', model);
         });
     });
 
     app.get('/api/newjob', function (req, res) {
-        getNewJobModel(req, res).done(function(model){
+        getNewJobModel(req, res).then(function (model) {
             res.json(model);
         });
     });
-
 };

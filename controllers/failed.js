@@ -1,34 +1,35 @@
-'use strict';
+const redisModel = require('../models/redis');
 
+module.exports = (app) => {
+    const getFailedData = (req, res) => {
+        return new Promise((resolve) => {
+            redisModel.getStatus("failed").done((failed) => {
+                redisModel.getJobsInList(failed).done((keys) => {
+                    redisModel.formatKeys(keys).done((keyList) => {
+                        redisModel.getStatusCounts().done((countObject) => {
+                            const model = {
+                                keys: keyList,
+                                counts: countObject,
+                                failed: true,
+                                type: "Failed"
+                            };
 
-var redisModel = require('../models/redis'),
-    q = require('q');
-
-
-module.exports = function (app) {
-    var getFailedData = function(req, res){
-        var dfd = q.defer();
-        redisModel.getStatus("failed").done(function(failed){
-            redisModel.getJobsInList(failed).done(function(keys){
-                redisModel.formatKeys(keys).done(function(keyList){
-                    redisModel.getStatusCounts().done(function(countObject){
-                        var model = { keys: keyList, counts: countObject, failed: true, type: "Failed"};
-                        dfd.resolve(model);
+                            resolve(model);
+                        });
                     });
                 });
             });
         });
-        return dfd.promise;
     }
 
-    app.get('/failed', function (req, res) {
-        getFailedData(req, res).done(function(model){
+    app.get('/failed', (req, res) => {
+        getFailedData(req, res).then((model) => {
             res.render('jobList', model);
         });
     });
 
-    app.get('/api/failed', function (req, res) {
-        getFailedData(req, res).done(function(model){
+    app.get('/api/failed', (req, res) => {
+        getFailedData(req, res).then((model) => {
             res.json(model);
         });
     });
