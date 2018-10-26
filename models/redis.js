@@ -576,17 +576,15 @@ const getQueues = () => {
         let completed = await redis.zcount(name + ":completed", '-inf', '+inf');
         let failed = await redis.zcount(name + ":failed", '-inf', '+inf');
 
-        return Promise.join(active, stalled, pending, delayed, completed, failed, (active, stalled, pending, delayed, completed, failed) => {
-          return {
-            name: name.substring(5),
-            active: active.length,
-            stalled: stalled.length,
-            pending: pending,
-            delayed: delayed,
-            completed: completed,
-            failed: failed
-          };
-        });
+        return {
+          name: name.substring(5),
+          active: active.length,
+          stalled: stalled.length,
+          pending,
+          delayed,
+          completed,
+          failed,
+        };
       }));
     }).then(resolve);
   });
