@@ -504,42 +504,43 @@ var getDelayTimeForKeys = function (keys) {
     return dfd.promise;
 };
 
-var getQueues = function () {
-    var dfd = q.defer();
-    var queues = redis.keys("bull:*:id").then(function (queues) {
-        return Promise.all(queues.map(function (queue) {
-            var name = queue.substring(0, queue.length - 3);
-            var activeJobs = redis.lrangeAsync(name + ":active", 0, -1);
-            var active = activeJobs.filter(function (job) {
-                return redis.getAsync(name + ":" + job + ":lock").then(function (lock) {
-                    return lock != null;
+const getQueues = () => {
+    return new Promise((resolve) => {
+        redis.keys("bull:*:id").then((queues) => {
+            return Promise.all(queues.map(async (queue) => {
+                let name = queue.substring(0, queue.length - 3);
+                let activeJobs = await redis.lrange(name + ":active", 0, -1);
+                let active = activeJobs.filter((job) => {
+                    return redis.get(name + ":" + job + ":lock").then((lock) => {
+                        return lock != null;
+                    });
                 });
-            });
-            var stalled = activeJobs.filter(function (job) {
-                return redis.getAsync(name + ":" + job + ":lock").then(function (lock) {
-                    return lock == null;
+                let stalled = activeJobs.filter((job) => {
+                    return redis.get(name + ":" + job + ":lock").then((lock) => {
+                        return lock == null;
+                    });
                 });
-            });
-            var pending = redis.llenAsync(name + ":wait");
-            var delayed = redis.zcardAsync(name + ":delayed");
-            var completed = redis.zcountAsync(name + ":completed", '-inf', '+inf');
-            var failed = redis.zcountAsync(name + ":failed", '-inf', '+inf');
-            return Promise.join(active, stalled, pending, delayed, completed, failed, function (active, stalled, pending, delayed, completed, failed) {
-                return {
-                    name: name.substring(5),
-                    active: active.length,
-                    stalled: stalled.length,
-                    pending: pending,
-                    delayed: delayed,
-                    completed: completed,
-                    failed: failed
-                };
-            });
-        }));
-    }).then(dfd.resolve);
-    return dfd.promise;
-};
 
+                let pending = await redis.llen(name + ":wait");
+                let delayed = await redis.zcard(name + ":delayed");
+                let completed = await redis.zcount(name + ":completed", '-inf', '+inf');
+                let failed = await redis.zcount(name + ":failed", '-inf', '+inf');
+
+                return Promise.join(active, stalled, pending, delayed, completed, failed, (active, stalled, pending, delayed, completed, failed) => {
+                    return {
+                        name: name.substring(5),
+                        active: active.length,
+                        stalled: stalled.length,
+                        pending: pending,
+                        delayed: delayed,
+                        completed: completed,
+                        failed: failed
+                    };
+                });
+            }));
+        }).then(resolve);
+    });
+};
 
 module.exports.getAllKeys = getAllKeys; //Returns all JOB keys in string form (ex: bull:video transcoding:101)
 module.exports.formatKeys = formatKeys; //Returns all keys in object form, with status applied to object. Ex: {id: 101, type: "video transcoding", status: "pending"}
