@@ -3,7 +3,7 @@ const redisModel = require('../models/redis');
 module.exports = function (app) {
     const getNewJobModel = function (req, res) {
         return new Promise((resolve) => {
-            redisModel.getStatusCounts().done(function (countObject) {
+            redisModel.getStatusCounts().then(function (countObject) {
                 var model = {
                     counts: countObject,
                     newjob: true,

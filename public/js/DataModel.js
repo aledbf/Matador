@@ -20,7 +20,7 @@ var DataModel = function () {
 			var refreshUrl = window.basepath + '/api' + ( pathname !== '/' ? pathname : '' );
 
 			var refresh = function () {
-				$.getJSON( refreshUrl ).done( function ( data ) {
+				$.getJSON( refreshUrl ).then( function ( data ) {
 					_self.complete( " (" + data.counts.complete + ")" );
 					_self.failed( " (" + data.counts.failed + ")" );
 					_self.active( " (" + data.counts.active + ")" );

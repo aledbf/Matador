@@ -3,8 +3,8 @@ const redisModel = require('../models/redis');
 module.exports = (app) => {
     var getQueuesModel = (req, res) => {
         return new Promise((resolve) => {
-            redisModel.getQueues().done((queues) => {
-                redisModel.getStatusCounts().done((countObject) => {
+            redisModel.getQueues().then((queues) => {
+                redisModel.getStatusCounts().then((countObject) => {
                     var model = {
                         keys: queues,
                         counts: countObject,

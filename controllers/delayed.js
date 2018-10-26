@@ -6,11 +6,11 @@ var redisModel = require('../models/redis'),
 module.exports = function (app) {
     var getDelayedModel = function (req, res) {
         var dfd = q.defer();
-        redisModel.getStatus("delayed").done(function (delayed) {
-            redisModel.getJobsInList(delayed).done(function (keys) {
-                redisModel.formatKeys(keys).done(function (formattedKeys) {
-                    redisModel.getDelayTimeForKeys(formattedKeys).done(function (keyList) {
-                        redisModel.getStatusCounts().done(function (countObject) {
+        redisModel.getStatus("delayed").then(function (delayed) {
+            redisModel.getJobsInList(delayed).then(function (keys) {
+                redisModel.formatKeys(keys).then(function (formattedKeys) {
+                    redisModel.getDelayTimeForKeys(formattedKeys).then(function (keyList) {
+                        redisModel.getStatusCounts().then(function (countObject) {
                             keyList = keyList.map(function (key) {
                                 var numSecondsUntil = moment(new Date(key.delayUntil)).diff(moment(), 'seconds');
                                 var formattedDelayUntil = 'in ' + numSecondsUntil + ' seconds';
@@ -40,13 +40,13 @@ module.exports = function (app) {
     };
 
     app.get('/delayed', function (req, res) {
-        getDelayedModel(req, res).done(function (model) {
+        getDelayedModel(req, res).then(function (model) {
             res.render('jobList', model);
         });
     });
 
     app.get('/api/delayed', function (req, res) {
-        getDelayedModel(req, res).done(function (model) {
+        getDelayedModel(req, res).then(function (model) {
             res.json(model);
         });
     });

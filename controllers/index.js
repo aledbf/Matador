@@ -5,10 +5,10 @@ const updateInfo = require('../lib/updateInfo.js');
 module.exports = (app) => {
     var getOverviewData = (req, res) => {
         return new Promise((resolve) => {
-            redisModel.getAllKeys().done((keys) => {
-                redisModel.formatKeys(keys).done((keyList) => {
-                    redisModel.getStatusCounts().done((countObject) => {
-                        updateInfo.getMemoryUsage().done((memoryUsage) => {
+            redisModel.getAllKeys().then((keys) => {
+                redisModel.formatKeys(keys).then((keyList) => {
+                    redisModel.getStatusCounts().then((countObject) => {
+                        updateInfo.getMemoryUsage().then((memoryUsage) => {
                             if (countObject.stuck == 0) keyList = [];
                             else keyList = _.filter(keyList, (key) => {
                                 return key.status === "stuck";

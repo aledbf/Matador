@@ -3,10 +3,10 @@ const redisModel = require('../models/redis');
 module.exports = function (app) {
     var getPendingModel = function (req, res) {
         return new Promise((resolve) => {
-            redisModel.getStatus("wait").done(function (active) {
-                redisModel.getJobsInList(active).done(function (keys) {
-                    redisModel.formatKeys(keys).done(function (keyList) {
-                        redisModel.getStatusCounts().done(function (countObject) {
+            redisModel.getStatus("wait").then(function (active) {
+                redisModel.getJobsInList(active).then(function (keys) {
+                    redisModel.formatKeys(keys).then(function (keyList) {
+                        redisModel.getStatusCounts().then(function (countObject) {
                             var model = {
                                 keys: keyList,
                                 counts: countObject,

@@ -3,10 +3,10 @@ const redisModel = require('../models/redis');
 module.exports = (app) => {
     const getFailedData = (req, res) => {
         return new Promise((resolve) => {
-            redisModel.getStatus("failed").done((failed) => {
-                redisModel.getJobsInList(failed).done((keys) => {
-                    redisModel.formatKeys(keys).done((keyList) => {
-                        redisModel.getStatusCounts().done((countObject) => {
+            redisModel.getStatus("failed").then((failed) => {
+                redisModel.getJobsInList(failed).then((keys) => {
+                    redisModel.formatKeys(keys).then((keyList) => {
+                        redisModel.getStatusCounts().then((countObject) => {
                             const model = {
                                 keys: keyList,
                                 counts: countObject,

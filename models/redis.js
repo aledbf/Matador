@@ -1,334 +1,369 @@
-'use strict';
+const _ = require("lodash");
 
-var _ = require("lodash"),
-    Promise = require('bluebird'),
-    q = require('q');
-
-var getActiveKeys = function (queueName) {
-    var dfd = q.defer();
+const getActiveKeys = function (queueName) {
+  return new Promise((resolve) => {
     queueName = queueName ? queueName : '*';
     redis.keys("bull:" + queueName + ":active", function (err, keys) {
-        dfd.resolve(keys);
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getCompletedKeys = function (queueName) {
-    var dfd = q.defer();
+const getCompletedKeys = function (queueName) {
+  return new Promise((resolve) => {
     queueName = queueName ? queueName : '*';
     redis.keys("bull:" + queueName + ":completed", function (err, keys) {
-        dfd.resolve(keys);
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getFailedKeys = function (queueName) {
-    var dfd = q.defer();
+const getFailedKeys = function (queueName) {
+  return new Promise((resolve) => {
     queueName = queueName ? queueName : '*';
     redis.keys("bull:" + queueName + ":failed", function (err, keys) {
-        dfd.resolve(keys);
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getWaitingKeys = function (queueName) {
-    var dfd = q.defer();
+const getWaitingKeys = function (queueName) {
+  return new Promise((resolve) => {
     queueName = queueName ? queueName : '*';
     redis.keys("bull:" + queueName + ":wait", function (err, keys) {
-        dfd.resolve(keys);
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getDelayedKeys = function (queueName) {
-    var dfd = q.defer();
+const getDelayedKeys = function (queueName) {
+  return new Promise((resolve) => {
     queueName = queueName ? queueName : '*';
     redis.keys("bull:" + queueName + ":delayed", function (err, keys) {
-        dfd.resolve(keys);
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getStuckKeys = function () {
-    var dfd = q.defer();
+const getStuckKeys = () => {
+  return new Promise((resolve) => {
     //TODO: Find better way to do this. Being lazy at the moment.
-    getAllKeys().done(function (keys) {
-        formatKeys(keys).done(function (keyList) {
-            keyList = _.filter(keyList, function (key) {
-                return key.status === "stuck";
-            });
-            var results = {};
-            var count = 0;
-            for (var i = 0, ii = keyList.length; i < ii; i++) {
-                if (!results[keyList[i].type]) results[keyList[i].type] = [];
-                results[keyList[i].type].push(keyList[i].id);
-                count++;
-            }
-            dfd.resolve({
-                keys: results,
-                count: count
-            });
+    getAllKeys().then((keys) => {
+      formatKeys(keys).then((keyList) => {
+        keyList = _.filter(keyList, (key) => {
+          return key.status === "stuck";
         });
+
+        let results = {};
+        let count = 0;
+        for (let i = 0, ii = keyList.length; i < ii; i++) {
+          if (!results[keyList[i].type]) results[keyList[i].type] = [];
+          results[keyList[i].type].push(keyList[i].id);
+          count++;
+        }
+
+        return resolve({
+          keys: results,
+          count: count
+        });
+      });
     });
-    return dfd.promise;
+  });
 };
 
-var getStatus = function (status, queueName) {
-    var dfd = q.defer();
-    var getStatusKeysFunction = null;
+const getStatus = function (status, queueName) {
+  return new Promise((resolve, reject) => {
+    let getStatusKeysFunction = null;
+
     if (status === "complete") {
-        getStatusKeysFunction = getCompletedKeys;
+      getStatusKeysFunction = getCompletedKeys;
     } else if (status === "active") {
-        getStatusKeysFunction = getActiveKeys;
+      getStatusKeysFunction = getActiveKeys;
     } else if (status === "failed") {
-        getStatusKeysFunction = getFailedKeys;
+      getStatusKeysFunction = getFailedKeys;
     } else if (status === "wait") {
-        getStatusKeysFunction = getWaitingKeys;
+      getStatusKeysFunction = getWaitingKeys;
     } else if (status === "delayed") {
-        getStatusKeysFunction = getDelayedKeys;
+      getStatusKeysFunction = getDelayedKeys;
     } else if (status === "stuck") {
-        return getStuckKeys();
+      return getStuckKeys();
     } else {
-        console.log("UNSUPPORTED STATUS:", status);
-        return;
+      return reject(new Error("UNSUPPORTED STATUS:", status));
     }
 
-    getStatusKeysFunction(queueName).done(function (keys) {
-        var multi = [];
-        var statusKeys = [];
-        for (var i = 0, ii = keys.length; i < ii; i++) {
-            var arr = keys[i].split(":");
-            var queueName = arr.slice(1, arr.length - 1);
-            var queue = queueName.join(":");
-            statusKeys[queue] = []; // This creates an array/object thing with keys of the job type
-            if (status === "active" || status === "wait") {
-                multi.push(['lrange', keys[i], 0, -1]);
-            } else if (status === "delayed" || status === "complete" || status === "failed") {
-                multi.push(["zrange", keys[i], 0, -1]);
-            } else {
-                multi.push(["smembers", keys[i]]);
-            }
+    getStatusKeysFunction(queueName).then(function (keys) {
+      var multi = [];
+      var statusKeys = [];
+
+      for (var i = 0, ii = keys.length; i < ii; i++) {
+        var arr = keys[i].split(":");
+        var queueName = arr.slice(1, arr.length - 1);
+        var queue = queueName.join(":");
+        statusKeys[queue] = []; // This creates an array/object thing with keys of the job type
+        if (status === "active" || status === "wait") {
+          multi.push(['lrange', keys[i], 0, -1]);
+        } else if (status === "delayed" || status === "complete" || status === "failed") {
+          multi.push(["zrange", keys[i], 0, -1]);
+        } else {
+          multi.push(["smembers", keys[i]]);
         }
-        redis.multi(multi).exec(function (err, data) {
-            var statusKeyKeys = Object.keys(statusKeys); // Get the keys from the object we created earlier...
-            var count = 0;
-            for (var k = 0, kk = data.length; k < kk; k++) {
-                statusKeys[statusKeyKeys[k]] = data[k];
-                count += data[k].length;
-            }
-            dfd.resolve({
-                keys: statusKeys,
-                count: count
-            });
+      }
+
+      redis.multi(multi).exec(function (err, data) {
+        var statusKeyKeys = Object.keys(statusKeys); // Get the keys from the object we created earlier...
+        var count = 0;
+        for (var k = 0, kk = data.length; k < kk; k++) {
+          statusKeys[statusKeyKeys[k]] = data[k];
+          count += data[k].length;
+        }
+
+        return resolve({
+          keys: statusKeys,
+          count: count
         });
+      });
     });
-    return dfd.promise;
+  });
 };
 
-var getAllKeys = function () {
-    var dfd = q.defer();
+const getAllKeys = function () {
+  return new Promise((resolve) => {
     redis.keys("bull:*:[0-9]*", function (err, keysWithLocks) {
-        var keys = [];
-        for (var i = 0, ii = keysWithLocks.length; i < ii; i++) {
-            var keyWithLock = keysWithLocks[i];
-            if (keyWithLock.substring(keyWithLock.length - 5, keyWithLock.length) !== ":lock") {
-                keys.push(keyWithLock);
-            }
+      var keys = [];
+      for (var i = 0, ii = keysWithLocks.length; i < ii; i++) {
+        var keyWithLock = keysWithLocks[i];
+        if (keyWithLock.substring(keyWithLock.length - 5, keyWithLock.length) !== ":lock") {
+          keys.push(keyWithLock);
         }
-        dfd.resolve(keys);
+      }
+      resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var getFullKeyNamesFromIds = function (list) {
-    if (!list) return;
-    if (!(list instanceof Array)) return;
-    var dfd = q.defer();
+const getFullKeyNamesFromIds = function (list) {
+  return new Promise((resolve) => {
+    if (!list) {
+      return resolve();
+    }
+
+    if (!(list instanceof Array)) {
+      return resolve();
+    }
+
     var keys = [];
     for (var i = 0, ii = list.length; i < ii; i++) {
-        keys.push(["keys", "bull:*:" + list[i]]);
+      keys.push(["keys", "bull:*:" + list[i]]);
     }
 
     redis.multi(keys).exec(function (err, arrayOfArrays) {
-        var results = [];
-        for (var i = 0, ii = arrayOfArrays.length; i < ii; i++) {
-            if (arrayOfArrays[i].length === 1) {
-                results.push(arrayOfArrays[i][0]);
-            }
+      var results = [];
+      for (var i = 0, ii = arrayOfArrays.length; i < ii; i++) {
+        if (arrayOfArrays[i].length === 1) {
+          results.push(arrayOfArrays[i][0]);
         }
-        dfd.resolve(results);
+      }
+
+      resolve(results);
     });
-    return dfd.promise;
+  });
 }
 
-var getJobsInList = function (list) {
-    if (!list) return;
-    var dfd = q.defer();
-    var jobs = [];
+const getJobsInList = function (list) {
+  return new Promise((resolve) => {
+    if (!list) {
+      return resolve();
+    }
+
     if (list["keys"]) {
-        //New list type
-        var keys = list["keys"];
-        var objectKeys = Object.keys(keys);
-        var fullNames = [];
-        for (var i = 0, ii = objectKeys.length; i < ii; i++) {
-            for (var k = 0, kk = keys[objectKeys[i]].length; k < kk; k++) {
-                fullNames.push("bull:" + objectKeys[i] + ":" + keys[objectKeys[i]][k]);
-            }
+      //New list type
+      var keys = list["keys"];
+      var objectKeys = Object.keys(keys);
+      var fullNames = [];
+      for (var i = 0, ii = objectKeys.length; i < ii; i++) {
+        for (var k = 0, kk = keys[objectKeys[i]].length; k < kk; k++) {
+          fullNames.push("bull:" + objectKeys[i] + ":" + keys[objectKeys[i]][k]);
         }
-        dfd.resolve(fullNames);
-    } else {
-        //Old list type
-        getFullKeyNamesFromIds(list).done(function (keys) {
-            dfd.resolve(keys);
-        });
+      }
+
+      resolve(fullNames);
     }
-    return dfd.promise;
-};
 
-var getStatusCounts = function () {
-    var dfd = q.defer();
-    getStatus("active").done(function (active) {
-        getStatus("complete").done(function (completed) {
-            getStatus("failed").done(function (failed) {
-                getStatus("wait").done(function (pendingKeys) {
-                    getStatus("delayed").done(function (delayedKeys) {
-                        getAllKeys().done(function (allKeys) {
-                            redis.keys("bull:*:id", function (err, keys) {
-                                var countObject = {
-                                    active: active.count,
-                                    complete: completed.count,
-                                    failed: failed.count,
-                                    pending: pendingKeys.count,
-                                    delayed: delayedKeys.count,
-                                    total: allKeys.length,
-                                    stuck: allKeys.length - (active.count + completed.count + failed.count + pendingKeys.count + delayedKeys.count),
-                                    queues: keys.length
-                                };
-                                dfd.resolve(countObject);
-                            });
-                        });
-                    });
-                });
-            });
-        });
+    //Old list type
+    getFullKeyNamesFromIds(list).then(function (keys) {
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
-var formatKeys = function (keys) {
-    if (!keys) return;
-    var dfd = q.defer();
-    getStatus("failed").done(function (failedJobs) {
-        getStatus("complete").done(function (completedJobs) {
-            getStatus("active").done(function (activeJobs) {
-                getStatus("wait").done(function (pendingJobs) {
-                    getStatus("delayed").done(function (delayedJobs) {
-                        var keyList = [];
-                        for (var i = 0, ii = keys.length; i < ii; i++) {
-                            var arr = keys[i].split(":");
-                            var queueName = arr.slice(1, arr.length - 1);
-                            var queue = queueName.join(":");
-                            var explodedKeys = {};
-                            explodedKeys[0] = arr[0];
-                            explodedKeys[1] = queue;
-                            explodedKeys[2] = arr[arr.length - 1];
-                            var status = "stuck";
-                            if (activeJobs.keys[explodedKeys[1]] && activeJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) status = "active";
-                            else if (completedJobs.keys[explodedKeys[1]] && completedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) status = "complete";
-                            else if (failedJobs.keys[explodedKeys[1]] && failedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) status = "failed";
-                            else if (pendingJobs.keys[explodedKeys[1]] && pendingJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) status = "pending";
-                            else if (delayedJobs.keys[explodedKeys[1]] && delayedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) status = "delayed";
-                            keyList.push({
-                                id: explodedKeys[2],
-                                type: explodedKeys[1],
-                                status: status
-                            });
-                        }
+const getStatusCounts = () => {
+  return new Promise((resolve) => {
+    getStatus("active").then((active) => {
+      getStatus("complete").then((completed) => {
+        getStatus("failed").then((failed) => {
+          getStatus("wait").then((pendingKeys) => {
+            getStatus("delayed").then((delayedKeys) => {
+              getAllKeys().then((allKeys) => {
+                redis.keys("bull:*:id", (err, keys) => {
+                  var countObject = {
+                    active: active.count,
+                    complete: completed.count,
+                    failed: failed.count,
+                    pending: pendingKeys.count,
+                    delayed: delayedKeys.count,
+                    total: allKeys.length,
+                    stuck: allKeys.length - (active.count + completed.count + failed.count + pendingKeys.count + delayedKeys.count),
+                    queues: keys.length
+                  };
 
-                        keyList = _.sortBy(keyList, function (key) {
-                            return parseInt(key.id);
-                        });
-                        dfd.resolve(keyList);
-                    });
+                  return resolve(countObject);
                 });
+              });
             });
+          });
         });
+      });
     });
-    return dfd.promise;
+  })
 };
 
-var removeJobs = function (list) {
-    if (!list) return;
-    //Expects {id: 123, type: "video transcoding"}
-
-    var multi = [];
-    for (var i = 0, ii = list.length; i < ii; i++) {
-        var firstPartOfKey = "bull:" + list[i].type + ":";
-        multi.push(["del", firstPartOfKey + list[i].id]);
-        multi.push(["lrem", firstPartOfKey + "active", 0, list[i].id]);
-        multi.push(["lrem", firstPartOfKey + "wait", 0, list[i].id]);
-        multi.push(["zrem", firstPartOfKey + "completed", list[i].id]);
-        multi.push(["zrem", firstPartOfKey + "failed", list[i].id]);
-        multi.push(["zrem", firstPartOfKey + "delayed", list[i].id]);
-
+const formatKeys = (keys) => {
+  return new Promise((resolve) => {
+    if (!keys) {
+      return resolve();
     }
-    redis.multi(multi).exec();
+
+    getStatus("failed").then((failedJobs) => {
+      getStatus("complete").then((completedJobs) => {
+        getStatus("active").then((activeJobs) => {
+          getStatus("wait").then((pendingJobs) => {
+            getStatus("delayed").then((delayedJobs) => {
+              let keyList = [];
+              for (let i = 0, ii = keys.length; i < ii; i++) {
+                let arr = keys[i].split(":");
+
+                let queueName = arr.slice(1, arr.length - 1);
+                let queue = queueName.join(":");
+
+                let explodedKeys = {};
+                explodedKeys[0] = arr[0];
+                explodedKeys[1] = queue;
+                explodedKeys[2] = arr[arr.length - 1];
+
+                let status = "stuck";
+
+                if (activeJobs.keys[explodedKeys[1]] && typeof activeJobs.keys[explodedKeys[1]].indexOf === "function" && activeJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) {
+                  status = "active";
+                } else if (completedJobs.keys[explodedKeys[1]] && typeof completedJobs.keys[explodedKeys[1]].indexOf === "function" && completedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) {
+                  status = "complete";
+                } else if (failedJobs.keys[explodedKeys[1]] && typeof failedJobs.keys[explodedKeys[1]].indexOf === "function" && failedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) {
+                  status = "failed";
+                } else if (pendingJobs.keys[explodedKeys[1]] && typeof pendingJobs.keys[explodedKeys[1]].indexOf === "function" && pendingJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) {
+                  status = "pending";
+                } else if (delayedJobs.keys[explodedKeys[1]] && typeof delayedJobs.keys[explodedKeys[1]].indexOf === "function" && delayedJobs.keys[explodedKeys[1]].indexOf(explodedKeys[2]) !== -1) {
+                  status = "delayed";
+                }
+
+                keyList.push({
+                  id: explodedKeys[2],
+                  type: explodedKeys[1],
+                  status: status
+                });
+              }
+
+              keyList = _.sortBy(keyList, (key) => {
+                return parseInt(key.id);
+              });
+
+              resolve(keyList);
+            });
+          });
+        });
+      });
+    });
+  });
 };
 
-var makePendingByType = function (type) {
+const removeJobs = function (list) {
+  if (!list) return;
+  //Expects {id: 123, type: "video transcoding"}
+
+  var multi = [];
+  for (var i = 0, ii = list.length; i < ii; i++) {
+    var firstPartOfKey = "bull:" + list[i].type + ":";
+    multi.push(["del", firstPartOfKey + list[i].id]);
+    multi.push(["lrem", firstPartOfKey + "active", 0, list[i].id]);
+    multi.push(["lrem", firstPartOfKey + "wait", 0, list[i].id]);
+    multi.push(["zrem", firstPartOfKey + "completed", list[i].id]);
+    multi.push(["zrem", firstPartOfKey + "failed", list[i].id]);
+    multi.push(["zrem", firstPartOfKey + "delayed", list[i].id]);
+
+  }
+  redis.multi(multi).exec();
+};
+
+const makePendingByType = function (type) {
+  return new Promise((resolve) => {
     type = type.toLowerCase();
     var validTypes = ['active', 'complete', 'failed', 'wait', 'delayed']; //I could add stuck, but I won't support mass modifying "stuck" jobs because it's very possible for things to be in a "stuck" state temporarily, while transitioning between states
-    var dfd = q.defer();
+
+
     if (validTypes.indexOf(type) === -1) {
-        dfd.resolve({
-            success: false,
-            message: "Invalid type: " + type + " not in list of supported types"
-        });
-        return dfd.promise;
+      return resolve({
+        success: false,
+        message: "Invalid type: " + type + " not in list of supported types"
+      });
     }
-    getStatus(type).done(function (allKeys) {
-        var multi = [];
-        var allKeyObjects = Object.keys(allKeys.keys);
-        for (var i = 0, ii = allKeyObjects.length; i < ii; i++) {
-            var firstPartOfKey = "bull:" + allKeyObjects[i] + ":";
-            for (var k = 0, kk = allKeys.keys[allKeyObjects[i]].length; k < kk; k++) {
-                var item = allKeys.keys[allKeyObjects[i]][k];
-                //Brute force remove from everything
-                multi.push(["lrem", firstPartOfKey + "active", 0, item]);
-                multi.push(["zrem", firstPartOfKey + "completed", item]);
-                multi.push(["zrem", firstPartOfKey + "failed", item]);
-                multi.push(["zrem", firstPartOfKey + "delayed", item]);
-                //Add to pending
-                multi.push(["rpush", firstPartOfKey + "wait", item]);
-            }
+
+    getStatus(type).then(function (allKeys) {
+      var multi = [];
+      var allKeyObjects = Object.keys(allKeys.keys);
+      for (var i = 0, ii = allKeyObjects.length; i < ii; i++) {
+        var firstPartOfKey = "bull:" + allKeyObjects[i] + ":";
+        for (var k = 0, kk = allKeys.keys[allKeyObjects[i]].length; k < kk; k++) {
+          var item = allKeys.keys[allKeyObjects[i]][k];
+          //Brute force remove from everything
+          multi.push(["lrem", firstPartOfKey + "active", 0, item]);
+          multi.push(["zrem", firstPartOfKey + "completed", item]);
+          multi.push(["zrem", firstPartOfKey + "failed", item]);
+          multi.push(["zrem", firstPartOfKey + "delayed", item]);
+          //Add to pending
+          multi.push(["rpush", firstPartOfKey + "wait", item]);
         }
-        redis.multi(multi).exec(function (err, data) {
-            if (err) {
-                dfd.resolve({
-                    success: false,
-                    message: err
-                });
-            } else {
-                dfd.resolve({
-                    success: true,
-                    message: "Successfully made all " + type + " jobs pending."
-                });
-            }
+      }
+
+      redis.multi(multi).exec(function (err, data) {
+        if (err) {
+          return resolve({
+            success: false,
+            message: err
+          });
+        }
+
+        return resolve({
+          success: true,
+          message: "Successfully made all " + type + " jobs pending."
         });
+      });
     });
-    return dfd.promise;
+  });
 };
 
 var makePendingById = function (type, id) {
-    var dfd = q.defer();
-    if (!id) dfd.resolve({
+  return new Promise((resolve) => {
+    if (!id) {
+      return resolve({
         success: false,
         message: "There was no ID provided."
-    });
-    if (!type) dfd.resolve({
+      });
+    }
+
+    if (!type) {
+      return resolve({
         success: false,
         message: "There was no type provided."
-    });
+      });
+    }
 
     var firstPartOfKey = "bull:" + type + ":";
     var multi = [];
@@ -340,83 +375,91 @@ var makePendingById = function (type, id) {
     //Add to pending
     multi.push(["rpush", firstPartOfKey + "wait", id]);
     redis.multi(multi).exec(function (err, data) {
-        if (err) {
-            dfd.resolve({
-                success: false,
-                message: err
-            });
-        } else {
-            dfd.resolve({
-                success: true,
-                message: "Successfully made " + type + " job #" + id + " pending."
-            });
-        }
+      if (err) {
+        return resolve({
+          success: false,
+          message: err
+        });
+      }
+
+      return resolve({
+        success: true,
+        message: "Successfully made " + type + " job #" + id + " pending."
+      });
     });
-    return dfd.promise;
+  });
 };
 
-var deleteJobByStatus = function (type, queueName) {
+const deleteJobByStatus = function (type, queueName) {
+  return new Promise((resolve) => {
     type = type.toLowerCase();
     var validTypes = ['active', 'complete', 'failed', 'wait', 'delayed']; //I could add stuck, but I won't support mass modifying "stuck" jobs because it's very possible for things to be in a "stuck" state temporarily, while transitioning between states
-    var dfd = q.defer();
+
     if (validTypes.indexOf(type) === -1) {
-        dfd.resolve({
-            success: false,
-            message: "Invalid type: " + type + " not in list of supported types"
-        });
-        return dfd.promise;
+      return resolve({
+        success: false,
+        message: "Invalid type: " + type + " not in list of supported types"
+      });
     }
-    getStatus(type, queueName).done(function (allKeys) {
-        var multi = [];
-        var allKeyObjects = Object.keys(allKeys.keys);
-        for (var i = 0, ii = allKeyObjects.length; i < ii; i++) {
-            var firstPartOfKey = "bull:" + allKeyObjects[i] + ":";
-            for (var k = 0, kk = allKeys.keys[allKeyObjects[i]].length; k < kk; k++) {
-                var item = allKeys.keys[allKeyObjects[i]][k];
-                //Brute force remove from everything
-                multi.push(["lrem", firstPartOfKey + "active", 0, item]);
-                multi.push(["lrem", firstPartOfKey + "wait", 0, item]);
-                multi.push(["zrem", firstPartOfKey + "completed", item]);
-                multi.push(["zrem", firstPartOfKey + "failed", item]);
-                multi.push(["zrem", firstPartOfKey + "delayed", item]);
-                multi.push(["del", firstPartOfKey + item]);
-            }
+    getStatus(type, queueName).then(function (allKeys) {
+      var multi = [];
+      var allKeyObjects = Object.keys(allKeys.keys);
+      for (var i = 0, ii = allKeyObjects.length; i < ii; i++) {
+        var firstPartOfKey = "bull:" + allKeyObjects[i] + ":";
+        for (var k = 0, kk = allKeys.keys[allKeyObjects[i]].length; k < kk; k++) {
+          var item = allKeys.keys[allKeyObjects[i]][k];
+          //Brute force remove from everything
+          multi.push(["lrem", firstPartOfKey + "active", 0, item]);
+          multi.push(["lrem", firstPartOfKey + "wait", 0, item]);
+          multi.push(["zrem", firstPartOfKey + "completed", item]);
+          multi.push(["zrem", firstPartOfKey + "failed", item]);
+          multi.push(["zrem", firstPartOfKey + "delayed", item]);
+          multi.push(["del", firstPartOfKey + item]);
         }
-        redis.multi(multi).exec(function (err, data) {
-            if (err) {
-                dfd.resolve({
-                    success: false,
-                    message: err
-                });
-            } else {
-                if (queueName) {
-                    dfd.resolve({
-                        success: true,
-                        message: "Successfully deleted all jobs of status " + type + " of queue " + queueName + "."
-                    });
-                }
-                dfd.resolve({
-                    success: true,
-                    message: "Successfully deleted all jobs of status " + type + "."
-                });
-            }
+      }
+
+      redis.multi(multi).exec(function (err, data) {
+        if (err) {
+          return resolve({
+            success: false,
+            message: err
+          });
+        }
+
+        if (queueName) {
+          return resolve({
+            success: true,
+            message: "Successfully deleted all jobs of status " + type + " of queue " + queueName + "."
+          });
+        }
+
+        return resolve({
+          success: true,
+          message: "Successfully deleted all jobs of status " + type + "."
         });
+      });
     });
-    return dfd.promise;
+  });
 };
 
 var deleteJobById = function (type, id) {
-    var dfd = q.defer();
-    if (!id) dfd.resolve({
+  return new Promise((resolve) => {
+    if (!id) {
+      return resolve({
         success: false,
         message: "There was no ID provided."
-    });
-    if (!type) dfd.resolve({
+      });
+    }
+
+    if (!type) {
+      return resolve({
         success: false,
         message: "There was no type provided."
-    });
+      });
+    }
 
     var firstPartOfKey = "bull:" + type + ":";
+
     var multi = [];
     multi.push(["lrem", firstPartOfKey + "active", 0, id]);
     multi.push(["lrem", firstPartOfKey + "wait", 0, id]);
@@ -424,122 +467,129 @@ var deleteJobById = function (type, id) {
     multi.push(["zrem", firstPartOfKey + "failed", id]);
     multi.push(["zrem", firstPartOfKey + "delayed", id]);
     multi.push(["del", firstPartOfKey + id]);
+
     redis.multi(multi).exec(function (err, data) {
-        if (err) {
-            dfd.resolve({
-                success: false,
-                message: err
-            });
-        } else {
-            dfd.resolve({
-                success: true,
-                message: "Successfully deleted job " + type + " #" + id + "."
-            });
-        }
+      if (err) {
+        return resolve({
+          success: false,
+          message: err
+        });
+      }
+
+      return resolve({
+        success: true,
+        message: "Successfully deleted job " + type + " #" + id + "."
+      });
     });
-    return dfd.promise;
+  });
 };
 
 var getDataById = function (type, id) {
-    var dfd = q.defer();
-    if (!id) dfd.resolve({
+  return new Promise((resolve) => {
+    if (!id) {
+      return resolve({
         success: false,
         message: "There was no ID provided."
-    });
-    if (!type) dfd.resolve({
+      });
+    }
+
+    if (!type) {
+      return resolve({
         success: false,
         message: "There was no type provided."
-    });
+      });
+    }
 
     var firstPartOfKey = "bull:" + type + ":";
-    var multi = [];
     redis.hgetall(firstPartOfKey + id, function (err, data) {
-        if (err) {
-            dfd.resolve({
-                success: false,
-                message: err
-            });
-        } else {
-            dfd.resolve({
-                success: true,
-                message: data
-            });
-        }
+      if (err) {
+        return resolve({
+          success: false,
+          message: err
+        });
+      }
+
+      return resolve({
+        success: true,
+        message: data
+      });
     });
-    return dfd.promise;
+  });
 };
 
 var getProgressForKeys = function (keys) {
-    var dfd = q.defer();
+  return new Promise((resolve) => {
     var multi = [];
     for (var i = 0, ii = keys.length; i < ii; i++) {
-        multi.push(["hget", "bull:" + keys[i].type + ":" + keys[i].id, "progress"]);
+      multi.push(["hget", "bull:" + keys[i].type + ":" + keys[i].id, "progress"]);
     }
+
     redis.multi(multi).exec(function (err, results) {
-        for (var i = 0, ii = keys.length; i < ii; i++) {
-            keys[i].progress = results[i];
-        }
-        dfd.resolve(keys);
+      for (var i = 0, ii = keys.length; i < ii; i++) {
+        keys[i].progress = results[i];
+      }
+      resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
 var getDelayTimeForKeys = function (keys) {
-    var dfd = q.defer();
+  return new Promise((resolve) => {
     var multi = [];
     for (var i = 0, ii = keys.length; i < ii; i++) {
-        multi.push(["zscore", "bull:" + keys[i].type + ":delayed", keys[i].id]);
+      multi.push(["zscore", "bull:" + keys[i].type + ":delayed", keys[i].id]);
     }
+
     redis.multi(multi).exec(function (err, results) {
-        for (var i = 0, ii = keys.length; i < ii; i++) {
-            // Bull packs delay expire timestamp and job id into a single number. This is mostly
-            // needed to preserve execution order – first part of the resulting number contains
-            // the timestamp and the end contains the incrementing job id. We don't care about
-            // the id, so we can just remove this part from the value.
-            // https://github.com/OptimalBits/bull/blob/e38b2d70de1892a2c7f45a1fed243e76fd91cfd2/lib/scripts.js#L90
-            keys[i].delayUntil = new Date(Math.floor(results[i] / 0x1000));
-        }
-        dfd.resolve(keys);
+      for (var i = 0, ii = keys.length; i < ii; i++) {
+        // Bull packs delay expire timestamp and job id into a single number. This is mostly
+        // needed to preserve execution order – first part of the resulting number contains
+        // the timestamp and the end contains the incrementing job id. We don't care about
+        // the id, so we can just remove this part from the value.
+        // https://github.com/OptimalBits/bull/blob/e38b2d70de1892a2c7f45a1fed243e76fd91cfd2/lib/scripts.js#L90
+        keys[i].delayUntil = new Date(Math.floor(results[i] / 0x1000));
+      }
+      return resolve(keys);
     });
-    return dfd.promise;
+  });
 };
 
 const getQueues = () => {
-    return new Promise((resolve) => {
-        redis.keys("bull:*:id").then((queues) => {
-            return Promise.all(queues.map(async (queue) => {
-                let name = queue.substring(0, queue.length - 3);
-                let activeJobs = await redis.lrange(name + ":active", 0, -1);
-                let active = activeJobs.filter((job) => {
-                    return redis.get(name + ":" + job + ":lock").then((lock) => {
-                        return lock != null;
-                    });
-                });
-                let stalled = activeJobs.filter((job) => {
-                    return redis.get(name + ":" + job + ":lock").then((lock) => {
-                        return lock == null;
-                    });
-                });
+  return new Promise((resolve) => {
+    redis.keys("bull:*:id").then((queues) => {
+      return Promise.all(queues.map(async (queue) => {
+        let name = queue.substring(0, queue.length - 3);
+        let activeJobs = await redis.lrange(name + ":active", 0, -1);
+        let active = activeJobs.filter((job) => {
+          return redis.get(name + ":" + job + ":lock").then((lock) => {
+            return lock != null;
+          });
+        });
+        let stalled = activeJobs.filter((job) => {
+          return redis.get(name + ":" + job + ":lock").then((lock) => {
+            return lock == null;
+          });
+        });
 
-                let pending = await redis.llen(name + ":wait");
-                let delayed = await redis.zcard(name + ":delayed");
-                let completed = await redis.zcount(name + ":completed", '-inf', '+inf');
-                let failed = await redis.zcount(name + ":failed", '-inf', '+inf');
+        let pending = await redis.llen(name + ":wait");
+        let delayed = await redis.zcard(name + ":delayed");
+        let completed = await redis.zcount(name + ":completed", '-inf', '+inf');
+        let failed = await redis.zcount(name + ":failed", '-inf', '+inf');
 
-                return Promise.join(active, stalled, pending, delayed, completed, failed, (active, stalled, pending, delayed, completed, failed) => {
-                    return {
-                        name: name.substring(5),
-                        active: active.length,
-                        stalled: stalled.length,
-                        pending: pending,
-                        delayed: delayed,
-                        completed: completed,
-                        failed: failed
-                    };
-                });
-            }));
-        }).then(resolve);
-    });
+        return Promise.join(active, stalled, pending, delayed, completed, failed, (active, stalled, pending, delayed, completed, failed) => {
+          return {
+            name: name.substring(5),
+            active: active.length,
+            stalled: stalled.length,
+            pending: pending,
+            delayed: delayed,
+            completed: completed,
+            failed: failed
+          };
+        });
+      }));
+    }).then(resolve);
+  });
 };
 
 module.exports.getAllKeys = getAllKeys; //Returns all JOB keys in string form (ex: bull:video transcoding:101)

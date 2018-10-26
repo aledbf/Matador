@@ -175,7 +175,7 @@ jQuery.fn.extend({
             jQuery.data( elements[ i ], markDataKey, undefined, true ) ) &&
           jQuery.data( elements[ i ], deferDataKey, jQuery._Deferred(), true ) )) {
         count++;
-        tmp.done( resolve );
+        tmp.then( resolve );
       }
     }
     resolve();

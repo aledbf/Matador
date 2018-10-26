@@ -3,10 +3,10 @@ const redisModel = require('../models/redis');
 module.exports = (app) => {
     const requestComplete = (req, res) => {
         return new Promise((resolve) => {
-            redisModel.getStatus("complete").done((completed) => {
-                redisModel.getJobsInList(completed).done((keys) => {
-                    redisModel.formatKeys(keys).done((keyList) => {
-                        redisModel.getStatusCounts().done((countObject) => {
+            redisModel.getStatus("complete").then((completed) => {
+                redisModel.getJobsInList(completed).then((keys) => {
+                    redisModel.formatKeys(keys).then((keyList) => {
+                        redisModel.getStatusCounts().then((countObject) => {
                             var model = {
                                 keys: keyList,
                                 counts: countObject,

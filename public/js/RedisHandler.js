@@ -48,7 +48,7 @@ var RedisHandler = function () {
             var type = o.type;
             _self.util.notyConfirm("Are you sure you want to delete the job of type " + type + " with ID #" + id + "?", function () {
                 _self.util.blockUI();
-                $.getJSON(window.basepath + "/api/jobs/delete/id/" + type + "/" + id).done(function (response) {
+                $.getJSON(window.basepath + "/api/jobs/delete/id/" + type + "/" + id).then(function (response) {
                     _self.util.handleAjaxResponse(response);
                     dataModel.fn.refreshViewModel(true);
                 }).always(function () {
@@ -73,7 +73,7 @@ var RedisHandler = function () {
                 } else {
                     targetUrl = window.basepath + "/api/jobs/delete/status/" + status;
                 }
-                $.getJSON(targetUrl).done(function (response) {
+                $.getJSON(targetUrl).then(function (response) {
                     if (status !== statusDisplay && response.success) {
                         response.message = response.message.replace(status, statusDisplay);
                     }
@@ -89,7 +89,7 @@ var RedisHandler = function () {
             var type = o.type;
             _self.util.notyConfirm("Are you sure you want make the job of type " + type + " with ID #" + id + " pending? This will put this job in the queue to be run again.", function () {
                 _self.util.blockUI();
-                $.getJSON(window.basepath + "/api/jobs/pending/id/" + type + "/" + id).done(function (response) {
+                $.getJSON(window.basepath + "/api/jobs/pending/id/" + type + "/" + id).then(function (response) {
                     _self.util.handleAjaxResponse(response);
                     dataModel.fn.refreshViewModel(true);
                 }).always(function () {
@@ -101,7 +101,7 @@ var RedisHandler = function () {
             var id = o.id;
             var type = o.type;
             _self.util.blockUI();
-            $.getJSON(window.basepath + "/api/jobs/info/" + type + "/" + id).done(function (response) {
+            $.getJSON(window.basepath + "/api/jobs/info/" + type + "/" + id).then(function (response) {
                 if (response.success === false) {
                     _self.util.handleAjaxResponse(response);
                 } else {
@@ -155,7 +155,7 @@ var RedisHandler = function () {
             }
             _self.util.notyConfirm("Are you sure you want to make <strong>all</strong> jobs with the status " + status + " pending? This will put all jobs with this status in the queue to be run again.", function () {
                 _self.util.blockUI();
-                $.getJSON(window.basepath + "/api/jobs/pending/status/" + status).done(function (response) {
+                $.getJSON(window.basepath + "/api/jobs/pending/status/" + status).then(function (response) {
                     if (status !== statusDisplay && response.success) {
                         response.message = response.message.replace(status, statusDisplay);
                     }

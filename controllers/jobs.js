@@ -6,7 +6,7 @@ const redisModel = require('../models/redis');
 module.exports = (app) => {
     app.get('/api/jobs/pending/status/:type', (req, res) => {
         var type = req.params['type'];
-        redisModel.makePendingByType(type).done((results) => {
+        redisModel.makePendingByType(type).then((results) => {
             res.json(results);
         });
     });
@@ -14,7 +14,7 @@ module.exports = (app) => {
     app.get('/api/jobs/pending/id/:type/:id', (req, res) => {
         var id = req.params['id'],
             type = req.params['type'];
-        redisModel.makePendingById(type, id).done((results) => {
+        redisModel.makePendingById(type, id).then((results) => {
             res.json(results);
         });
     });
@@ -22,7 +22,7 @@ module.exports = (app) => {
     app.get('/api/jobs/delete/status/:type', (req, res) => {
         var type = req.params['type'];
         var queueName = req.params['queueName'] ? req.params['queueName'] : null;
-        redisModel.deleteJobByStatus(type, queueName).done((results) => {
+        redisModel.deleteJobByStatus(type, queueName).then((results) => {
             res.json(results);
         });
     });
@@ -30,7 +30,7 @@ module.exports = (app) => {
     app.get('/api/jobs/delete/id/:type/:id', (req, res) => {
         var id = req.params['id'],
             type = req.params['type'];
-        redisModel.deleteJobById(type, id).done((results) => {
+        redisModel.deleteJobById(type, id).then((results) => {
             res.json(results);
         });
     });
@@ -38,7 +38,7 @@ module.exports = (app) => {
     app.get('/api/jobs/info/:type/:id', (req, res) => {
         var id = req.params['id'],
             type = req.params['type'];
-        redisModel.getDataById(type, id).done((results) => {
+        redisModel.getDataById(type, id).then((results) => {
             res.json(results);
         });
     });
@@ -65,7 +65,7 @@ module.exports = (app) => {
         }
 
         bullModel.createJob(req.app.locals.options.redis, queue, payloadObject)
-            .done(() => {
+            .then(() => {
                 return res.status(200).send('OK');
             });
     });

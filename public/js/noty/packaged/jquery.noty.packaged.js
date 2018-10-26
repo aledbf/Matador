@@ -152,7 +152,7 @@ if (typeof Object.create !== 'function') {
 
             // If noty is have a timeout option
             if (self.options.timeout)
-                self.$bar.delay(self.options.timeout).promise().done(function () {
+                self.$bar.delay(self.options.timeout).promise().then(function () {
                     self.close();
                 });
 
@@ -200,7 +200,7 @@ if (typeof Object.create !== 'function') {
                 function () {
                     if (self.options.callback.afterClose) self.options.callback.afterClose.apply(self);
                 })
-                .promise().done(function () {
+                .promise().then(function () {
 
                     // Modal Cleaning
                     if (self.options.modal) {
@@ -262,7 +262,7 @@ if (typeof Object.create !== 'function') {
             if (!this.closed) {
                 var self = this;
                 this.options.timeout = time;
-                self.$bar.delay(self.options.timeout).promise().done(function () {
+                self.$bar.delay(self.options.timeout).promise().then(function () {
                     self.close();
                 });
             }

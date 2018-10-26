@@ -3,11 +3,11 @@ const redisModel = require('../models/redis');
 module.exports = (app) => {
     var requestActive = (req, res) => {
         return new Promise((resolve) => {
-            redisModel.getStatus("active").done((active) => {
-                redisModel.getJobsInList(active).done((keys) => {
-                    redisModel.formatKeys(keys).done((formattedKeys) => {
-                        redisModel.getProgressForKeys(formattedKeys).done((keyList) => {
-                            redisModel.getStatusCounts().done((countObject) => {
+            redisModel.getStatus("active").then((active) => {
+                redisModel.getJobsInList(active).then((keys) => {
+                    redisModel.formatKeys(keys).then((formattedKeys) => {
+                        redisModel.getProgressForKeys(formattedKeys).then((keyList) => {
+                            redisModel.getStatusCounts().then((countObject) => {
                                 const model = {
                                     keys: keyList,
                                     counts: countObject,
